@@ -184,7 +184,7 @@ function Results({ data }: { data: LookupResponse }) {
 
       <div className="duo">
         <SteamCard steam={data.steam} />
-        <FaceitCard faceit={data.faceit} />
+        <FaceitCard faceit={data.faceit} steamId64={data.steamId64} matches={data.matches} />
       </div>
 
       {linked && data.lifetime && <LifetimeStats lifetime={data.lifetime} />}

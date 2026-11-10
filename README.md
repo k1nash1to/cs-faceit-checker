@@ -72,6 +72,31 @@ GET /api/lookup?q=<steam id | ссылка | ник>&matches=12
 
 Коды ошибок: `400` — не распознали ID, `429` — больше 60 запросов в минуту с одного IP, `502` — внешний сервис не ответил.
 
+```
+POST /api/reports
+{ "steamId64": "7656119…", "nickname": "…", "matchId": "1-…", "reason": "cheats|smurf|toxic|other",
+  "comment": "…", "deviceId": "uuid из localStorage" }
+→ 201 { "ok": true }
+→ 409 { "duplicate": true }   — с этого устройства уже жаловались на игрока
+→ 400 / 429
+```
+
+## Жалобы
+
+Кнопка «Пожаловаться» на карточке FACEIT открывает форму: причина, необязательная привязка к конкретному матчу, комментарий. Жалоба **никуда не публикуется** — её видно только на приватной странице `/admin?token=<ADMIN_TOKEN>`.
+
+Почему не публичный счётчик: цифра жалоб без доказательств — это обвинение, которое накручивается за минуту (пятеро из одного Discord — и человек «читер»), а публично распространять такие утверждения юридически рискованно. Поэтому сайт собирает сигналы для одного человека, а не ярлыки для всех.
+
+Правила:
+
+- одна жалоба с устройства на игрока — гарантируется на уровне БД через `UNIQUE (target_steam_id, reporter_hash)`, повтор возвращает `409`;
+- идентификатор устройства приходит из `localStorage` и хешируется с солью, сырой id не хранится;
+- не больше 8 жалоб за 10 минут с одного IP;
+- текст жалобы экранируется при выводе на `/admin` (защита от XSS);
+- страница `/admin` отдаёт `X-Robots-Tag: noindex`.
+
+Хранение: если задан `DATABASE_URL` — Postgres (переживает рестарт и деплой), иначе `data/reports.json` (локально удобно, на Render free файл сбрасывается при рестарте).
+
 ## Как проверяется привязка FACEIT
 
 ```
@@ -103,9 +128,12 @@ server/
   http.mjs       fetch с таймаутом и одним ретраем
   util.mjs       TTL-кэш и ограниченная параллельность
   demo.mjs       демо-данные без ключей
+  reports.mjs    жалобы: Postgres или JSON-файл, дедуп по устройству
+  admin.mjs      приватная страница /admin?token=…
 src/
   App.tsx        состояние, поиск, история запросов, синк с URL
-  components/    карточки Steam/FACEIT, статистика, список матчей
+  reported.ts    пометка «жалоба отправлена» в localStorage
+  components/    карточки Steam/FACEIT, статистика, матчи, форма жалобы
   styles.css     тёмная тема, адаптив
 ```
 
@@ -124,7 +152,7 @@ src/
 - Build command: `pnpm install --frozen-lockfile --ignore-scripts && pnpm build`
 - Start command: `node server/index.mjs`
 - Health check path: `/api/health`
-- Переменные: `STEAM_API_KEY`, `FACEIT_API_KEY`, `MATCH_LIMIT=12`, `NODE_VERSION=22`
+- Переменные: `STEAM_API_KEY`, `FACEIT_API_KEY`, `MATCH_LIMIT=12`, `NODE_VERSION=22`, `ADMIN_TOKEN` (для `/admin`), при желании `DATABASE_URL` от Neon — тогда жалобы не теряются при рестарте.
 
 Особенности Render:
 

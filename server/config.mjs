@@ -36,3 +36,14 @@ export const HAS_FACEIT = FACEIT_KEY.length > 0;
 
 export const MATCH_LIMIT = Math.min(Math.max(int(process.env.MATCH_LIMIT, 12), 1), 30);
 export const FORCE_DEMO = /^(1|true|yes)$/i.test(String(process.env.DEMO ?? ''));
+
+// ── Жалобы ────────────────────────────────────────────────────────────────
+// Строка подключения к Postgres (Neon, Render, Supabase — любой).
+// Не задана → жалобы пишутся в data/reports.json (переживает рестарт только локально).
+export const DATABASE_URL = String(process.env.DATABASE_URL ?? '').trim();
+
+// Секрет для страницы /admin?token=... Придумай длинную случайную строку.
+export const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN ?? '').trim();
+
+// Соль для хеширования идентификатора устройства жалобщика.
+export const REPORT_SALT = String(process.env.REPORT_SALT ?? '').trim() || 'cs-faceit-checker-salt';

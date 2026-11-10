@@ -1,10 +1,24 @@
-import { countryFlag } from '../format';
-import type { FaceitPlayer, FaceitState } from '../types';
-import { Avatar, LevelBadge } from './Bits';
+import { useState } from 'react';
 
-export function FaceitCard({ faceit }: { faceit: FaceitState | null }) {
+import { countryFlag } from '../format';
+import { hasReported, markReported } from '../reported';
+import type { FaceitPlayer, FaceitState, Match } from '../types';
+import { Avatar, LevelBadge } from './Bits';
+import { ReportDialog } from './ReportDialog';
+
+type Props = {
+  faceit: FaceitState | null;
+  steamId64: string;
+  matches: Match[];
+};
+
+export function FaceitCard({ faceit, steamId64, matches }: Props) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [reported, setReported] = useState(() => hasReported(steamId64));
+  const isLinked = faceit?.linked === true;
+
   return (
-    <section className={`card card--faceit${faceit?.linked === true ? ' is-linked' : ''}`}>
+    <section className={`card card--faceit${isLinked ? ' is-linked' : ''}`}>
       <header className="card__head">
         <span className="card__kicker">FACEIT</span>
         {faceit?.linked === true && (
@@ -15,6 +29,36 @@ export function FaceitCard({ faceit }: { faceit: FaceitState | null }) {
       </header>
 
       {faceit?.linked === true ? <LinkedBody faceit={faceit} /> : <UnlinkedBody faceit={faceit} />}
+
+      {faceit?.linked === true && (
+        <div className="card__actions">
+          <button
+            type="button"
+            className="ghost ghost--small"
+            onClick={() => setDialogOpen(true)}
+            disabled={reported}
+            title={reported ? 'С этого устройства жалоба уже отправлена' : 'Жалоба видна только администратору'}
+          >
+            {reported ? 'Жалоба отправлена' : 'Пожаловаться'}
+          </button>
+          <p className="card__note card__note--inline">
+            Жалоба приватная: её видит только администратор. Публичного счётчика жалоб нет.
+          </p>
+        </div>
+      )}
+
+      {faceit?.linked === true && dialogOpen && (
+        <ReportDialog
+          steamId64={steamId64}
+          nickname={faceit.nickname}
+          matches={matches}
+          onClose={() => setDialogOpen(false)}
+          onSent={() => {
+            markReported(steamId64);
+            setReported(true);
+          }}
+        />
+      )}
     </section>
   );
 }
