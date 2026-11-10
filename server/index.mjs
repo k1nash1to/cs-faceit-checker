@@ -27,7 +27,7 @@ import { FORCE_DEMO, HAS_FACEIT, HAS_STEAM, MATCH_LIMIT, PORT, ROOT } from './co
 import { getMode, initDb } from './db.mjs';
 import { UpstreamError, UserInputError } from './errors.mjs';
 import { buildLookup } from './lookup.mjs';
-import { hasShell, renderProfileHtml } from './pages.mjs';
+import { hasShell, renderCompareHtml, renderProfileHtml } from './pages.mjs';
 import { REASONS, addReport, initReports, listReports } from './reports.mjs';
 
 const app = express();
@@ -370,6 +370,12 @@ async function loadPlayer(steamId64) {
   return buildLookup({ q: steamId64, limit: 5, demo });
 }
 
+/** Сравнению история не нужна — берём минимум, чтобы не тратить лимит FACEIT. */
+async function loadPlayerBrief(steamId64) {
+  const demo = !HAS_STEAM && !HAS_FACEIT;
+  return buildLookup({ q: steamId64, limit: 1, demo });
+}
+
 app.get('/player/:id/card.png', pageLimiter, async (req, res) => {
   const steamId64 = String(req.params.id);
   if (!/^\d{17}$/.test(steamId64)) return res.status(404).type('text/plain').send('Не найдено');
@@ -445,6 +451,34 @@ app.get('/player/:id', pageLimiter, async (req, res) => {
   });
 
   if (!html) return res.redirect(302, `/?q=${steamId64}`);
+
+  res.setHeader('cache-control', 'public, max-age=300');
+  return res.type('html').send(html);
+});
+
+app.get('/compare/:a/:b', pageLimiter, async (req, res) => {
+  const { a, b } = req.params;
+  if (!/^\d{17}$/.test(a) || !/^\d{17}$/.test(b)) return res.redirect(302, '/compare');
+  if (!hasShell()) return res.redirect(302, '/compare');
+
+  let left = null;
+  let right = null;
+
+  try {
+    [left, right] = await Promise.all([loadPlayerBrief(a), loadPlayerBrief(b)]);
+  } catch {
+    /* метатеги просто будут общими */
+  }
+
+  const html = renderCompareHtml({
+    a,
+    b,
+    left,
+    right,
+    origin: `${req.protocol}://${req.get('host')}`,
+  });
+
+  if (!html) return res.redirect(302, '/compare');
 
   res.setHeader('cache-control', 'public, max-age=300');
   return res.type('html').send(html);

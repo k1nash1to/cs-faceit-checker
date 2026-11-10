@@ -87,3 +87,47 @@ export function renderProfileHtml({ steamId64, steam, faceit, lifetime, origin }
 
   return cleaned.replace('</head>', `  ${tags}\n  </head>`);
 }
+
+export function renderCompareHtml({ a, b, left, right, origin }) {
+  const base = getShell();
+  if (!base) return null;
+
+  const nameOf = (data, fallback) => {
+    const linked = data?.faceit?.linked === true;
+    return data?.steam?.personaName ?? (linked ? data.faceit.nickname : null) ?? fallback;
+  };
+
+  const nameA = nameOf(left, 'Игрок 1');
+  const nameB = nameOf(right, 'Игрок 2');
+
+  const eloA = left?.faceit?.linked === true ? left.faceit.elo : null;
+  const eloB = right?.faceit?.linked === true ? right.faceit.elo : null;
+
+  const parts = [];
+  if (eloA !== null) parts.push(`${nameA}: ${eloA} Elo`);
+  if (eloB !== null) parts.push(`${nameB}: ${eloB} Elo`);
+
+  const title = `${nameA} vs ${nameB} — сравнение CS2`;
+  const description = parts.join(' · ') || 'Сравнение двух игроков CS2 по статистике FACEIT.';
+  const canonical = `${origin}/compare/${a}/${b}`;
+
+  const tags = [
+    `<title>${escapeAttr(title)}</title>`,
+    `<meta name="description" content="${escapeAttr(description)}">`,
+    `<link rel="canonical" href="${escapeAttr(canonical)}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:site_name" content="CS2 FACEIT Checker">`,
+    `<meta property="og:title" content="${escapeAttr(title)}">`,
+    `<meta property="og:description" content="${escapeAttr(description)}">`,
+    `<meta property="og:url" content="${escapeAttr(canonical)}">`,
+    `<meta name="twitter:card" content="summary">`,
+    `<meta name="twitter:title" content="${escapeAttr(title)}">`,
+    `<meta name="twitter:description" content="${escapeAttr(description)}">`,
+  ].join('\n    ');
+
+  const cleaned = base
+    .replace(/<title>[\s\S]*?<\/title>\s*/i, '')
+    .replace(/<meta\s+name="description"[^>]*>\s*/i, '');
+
+  return cleaned.replace('</head>', `  ${tags}\n  </head>`);
+}

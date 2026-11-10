@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, lookup } from './api';
 import type { LookupResponse } from './types';
 import { DemoNotice, ErrorPanel, LoadingPanel, WarningList } from './components/Bits';
+import { ComparePage } from './components/ComparePage';
 import { FaceitCard } from './components/FaceitCard';
 import { LifetimeStats } from './components/LifetimeStats';
 import { MatchList } from './components/MatchList';
@@ -19,6 +20,23 @@ const EXAMPLES = [
 ];
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
+
+type Route =
+  | { name: 'home' }
+  | { name: 'player'; id: string }
+  | { name: 'compare'; a?: string; b?: string };
+
+function parseRoute(): Route {
+  const path = window.location.pathname;
+
+  const player = path.match(/^\/player\/(\d{17})\/?$/);
+  if (player) return { name: 'player', id: player[1] };
+
+  const compare = path.match(/^\/compare(?:\/(\d{17}))?(?:\/(\d{17}))?\/?$/);
+  if (compare) return { name: 'compare', a: compare[1], b: compare[2] };
+
+  return { name: 'home' };
+}
 
 function loadRecent(): string[] {
   try {
@@ -38,6 +56,7 @@ export default function App() {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<{ message: string; hint: string | null } | null>(null);
   const [recent, setRecent] = useState<string[]>(loadRecent);
+  const [route, setRoute] = useState<Route>(() => parseRoute());
   const controllerRef = useRef<AbortController | null>(null);
 
   const run = useCallback(async (raw: string) => {
@@ -70,6 +89,7 @@ export default function App() {
         if (window.location.pathname !== next) {
           window.history.pushState({}, '', next);
         }
+        setRoute({ name: 'player', id: result.steamId64 });
       }
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -92,20 +112,28 @@ export default function App() {
     }
   }, [recent]);
 
-  // Роут /player/<steamid64> — такую ссылку можно переслать, она разворачивается картинкой.
+  // Роутинг: /player/<id> и /compare/<a>/<b>. Ссылки можно пересылать.
   useEffect(() => {
-    const idFromPath = () => window.location.pathname.match(/^\/player\/(\d{17})$/)?.[1] ?? null;
+    const initial = parseRoute();
+    setRoute(initial);
 
-    const initial = idFromPath() ?? new URLSearchParams(window.location.search).get('q');
-    if (initial) void run(initial);
+    if (initial.name === 'player') {
+      void run(initial.id);
+    } else if (initial.name === 'home') {
+      const fromQuery = new URLSearchParams(window.location.search).get('q');
+      if (fromQuery) void run(fromQuery);
+    }
 
     const onPop = () => {
-      const id = idFromPath();
-      if (id) {
-        void run(id);
-      } else {
+      const next = parseRoute();
+      setRoute(next);
+
+      if (next.name === 'player') {
+        void run(next.id);
+      } else if (next.name === 'home') {
         setData(null);
         setStatus('idle');
+        setQuery('');
       }
     };
 
@@ -115,6 +143,10 @@ export default function App() {
       controllerRef.current?.abort();
     };
   }, [run]);
+
+  if (route.name === 'compare') {
+    return <ComparePage initialA={route.a} initialB={route.b} />;
+  }
 
   return (
     <div className="app">
@@ -138,6 +170,15 @@ export default function App() {
           onSubmit={() => void run(query)}
           loading={status === 'loading'}
         />
+
+        <div className="hero__actions">
+          <a className="ghost hero__compare" href="/compare">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M3 8h14l-3-3M21 16H7l3 3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Сравнить двух игроков
+          </a>
+        </div>
 
         {recent.length > 0 && (
           <div className="recent">
@@ -233,6 +274,9 @@ function Results({ data }: { data: LookupResponse }) {
           >
             Скопировать ссылку
           </button>
+          <a className="ghost ghost--small" href={`/compare/${data.steamId64}`}>
+            Сравнить с другим
+          </a>
           <span className="share__hint">Ссылка разворачивается карточкой в Discord и Telegram</span>
         </div>
       )}

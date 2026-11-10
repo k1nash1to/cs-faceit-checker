@@ -12,10 +12,12 @@ export class ApiError extends Error {
 
 type LookupOptions = {
   signal?: AbortSignal;
+  matches?: number;
 };
 
 export async function lookup(query: string, options: LookupOptions = {}): Promise<LookupResponse> {
   const params = new URLSearchParams({ q: query });
+  if (options.matches) params.set('matches', String(options.matches));
   const res = await fetch(`/api/lookup?${params.toString()}`, {
     signal: options.signal,
     headers: { accept: 'application/json' },
