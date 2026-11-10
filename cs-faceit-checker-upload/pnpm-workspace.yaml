@@ -1,4 +1,0 @@
-# pnpm 10+ по умолчанию не запускает install-скрипты зависимостей.
-# esbuild (через Vite) нужен свой postinstall, иначе сборка может упасть.
-onlyBuiltDependencies:
-  - esbuild
