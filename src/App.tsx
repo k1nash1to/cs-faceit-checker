@@ -65,10 +65,11 @@ export default function App() {
         return [remembered, ...rest].slice(0, MAX_RECENT);
       });
 
-      if (!result.demo) {
-        const url = new URL(window.location.href);
-        url.searchParams.set('q', remembered);
-        window.history.replaceState(null, '', url);
+      if (!result.demo && result.steamId64) {
+        const next = `/player/${result.steamId64}`;
+        if (window.location.pathname !== next) {
+          window.history.pushState({}, '', next);
+        }
       }
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -91,11 +92,28 @@ export default function App() {
     }
   }, [recent]);
 
-  // Поддержка ссылок вида /?q=s1mple — результат можно переслать.
+  // Роут /player/<steamid64> — такую ссылку можно переслать, она разворачивается картинкой.
   useEffect(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get('q');
-    if (fromUrl) void run(fromUrl);
-    return () => controllerRef.current?.abort();
+    const idFromPath = () => window.location.pathname.match(/^\/player\/(\d{17})$/)?.[1] ?? null;
+
+    const initial = idFromPath() ?? new URLSearchParams(window.location.search).get('q');
+    if (initial) void run(initial);
+
+    const onPop = () => {
+      const id = idFromPath();
+      if (id) {
+        void run(id);
+      } else {
+        setData(null);
+        setStatus('idle');
+      }
+    };
+
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      controllerRef.current?.abort();
+    };
   }, [run]);
 
   return (
@@ -186,6 +204,38 @@ function Results({ data }: { data: LookupResponse }) {
         <SteamCard steam={data.steam} />
         <FaceitCard faceit={data.faceit} steamId64={data.steamId64} matches={data.matches} />
       </div>
+
+      {!data.demo && (
+        <div className="share">
+          <a
+            className="ghost ghost--small"
+            href={`/player/${data.steamId64}/card.png`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Карточка PNG
+          </a>
+          <a
+            className="ghost ghost--small"
+            href={`/player/${data.steamId64}/badge.svg`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Бейдж SVG
+          </a>
+          <button
+            type="button"
+            className="ghost ghost--small"
+            onClick={() => {
+              const url = `${window.location.origin}/player/${data.steamId64}`;
+              void navigator.clipboard?.writeText(url);
+            }}
+          >
+            Скопировать ссылку
+          </button>
+          <span className="share__hint">Ссылка разворачивается карточкой в Discord и Telegram</span>
+        </div>
+      )}
 
       {linked && data.lifetime && <LifetimeStats lifetime={data.lifetime} />}
       {linked && <MatchList matches={data.matches} />}

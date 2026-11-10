@@ -16,6 +16,7 @@
     "preview": "npm run build && npm run start"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "express": "^4.21.2",
     "pg": "^8.23.1",
     "react": "^19.0.0",

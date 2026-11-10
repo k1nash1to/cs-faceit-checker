@@ -21,10 +21,13 @@ import {
   sessionCookie,
   verifyPassword,
 } from './auth.mjs';
+import { renderBadge } from './badge.mjs';
+import { renderCard } from './card.mjs';
 import { FORCE_DEMO, HAS_FACEIT, HAS_STEAM, MATCH_LIMIT, PORT, ROOT } from './config.mjs';
 import { getMode, initDb } from './db.mjs';
 import { UpstreamError, UserInputError } from './errors.mjs';
 import { buildLookup } from './lookup.mjs';
+import { hasShell, renderProfileHtml } from './pages.mjs';
 import { REASONS, addReport, initReports, listReports } from './reports.mjs';
 
 const app = express();
@@ -340,6 +343,112 @@ function sendError(res, err) {
   console.error('[lookup] unexpected error:', err);
   return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 }
+
+// ── Публичные страницы игрока: карточка, бейдж, HTML с метатегами ──────────
+const pageLimiter = makeLimiter({
+  windowMs: 60_000,
+  max: 120,
+  error: 'Слишком много запросов',
+  hint: 'Подождите минуту.',
+});
+
+const CARD_TTL = 10 * 60_000;
+const pngCache = new Map();
+const badgeCache = new Map();
+
+function trimCache(cache, limit = 300) {
+  if (cache.size <= limit) return;
+  for (const key of cache.keys()) {
+    cache.delete(key);
+    if (cache.size <= limit * 0.8) break;
+  }
+}
+
+/** Одна выборка на карточку и бейдж: история нужна только для формы (5 матчей). */
+async function loadPlayer(steamId64) {
+  const demo = !HAS_STEAM && !HAS_FACEIT;
+  return buildLookup({ q: steamId64, limit: 5, demo });
+}
+
+app.get('/player/:id/card.png', pageLimiter, async (req, res) => {
+  const steamId64 = String(req.params.id);
+  if (!/^\d{17}$/.test(steamId64)) return res.status(404).type('text/plain').send('Не найдено');
+
+  try {
+    const cached = pngCache.get(steamId64);
+    if (cached && cached.expires > Date.now()) {
+      res.setHeader('content-type', 'image/png');
+      res.setHeader('cache-control', 'public, max-age=600');
+      return res.send(cached.png);
+    }
+
+    const data = await loadPlayer(steamId64);
+    const png = await renderCard({ ...data, siteLabel: req.hostname });
+
+    pngCache.set(steamId64, { png, expires: Date.now() + CARD_TTL });
+    trimCache(pngCache);
+
+    res.setHeader('content-type', 'image/png');
+    res.setHeader('cache-control', 'public, max-age=600');
+    return res.send(png);
+  } catch (err) {
+    console.error('[card] failed:', err);
+    return res.status(500).type('text/plain').send('Не удалось построить карточку');
+  }
+});
+
+app.get('/player/:id/badge.svg', pageLimiter, async (req, res) => {
+  const steamId64 = String(req.params.id);
+  if (!/^\d{17}$/.test(steamId64)) return res.status(404).type('text/plain').send('Не найдено');
+
+  try {
+    const cached = badgeCache.get(steamId64);
+    if (cached && cached.expires > Date.now()) {
+      res.setHeader('content-type', 'image/svg+xml; charset=utf-8');
+      res.setHeader('cache-control', 'public, max-age=600');
+      return res.send(cached.svg);
+    }
+
+    const data = await loadPlayer(steamId64);
+    const svg = renderBadge(data);
+
+    badgeCache.set(steamId64, { svg, expires: Date.now() + CARD_TTL });
+    trimCache(badgeCache);
+
+    res.setHeader('content-type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('cache-control', 'public, max-age=600');
+    return res.send(svg);
+  } catch (err) {
+    console.error('[badge] failed:', err);
+    return res.status(500).type('text/plain').send('Не удалось построить бейдж');
+  }
+});
+
+app.get('/player/:id', pageLimiter, async (req, res) => {
+  const steamId64 = String(req.params.id);
+  if (!/^\d{17}$/.test(steamId64)) return res.redirect(302, '/');
+  if (!hasShell()) return res.redirect(302, `/?q=${steamId64}`);
+
+  let data = null;
+  try {
+    data = await loadPlayer(steamId64);
+  } catch {
+    data = null;
+  }
+
+  const html = renderProfileHtml({
+    steamId64,
+    steam: data?.steam ?? null,
+    faceit: data?.faceit ?? null,
+    lifetime: data?.lifetime ?? null,
+    origin: `${req.protocol}://${req.get('host')}`,
+  });
+
+  if (!html) return res.redirect(302, `/?q=${steamId64}`);
+
+  res.setHeader('cache-control', 'public, max-age=300');
+  return res.type('html').send(html);
+});
 
 // ── Статика для продакшена ─────────────────────────────────────────────────
 const dist = path.join(ROOT, 'dist');

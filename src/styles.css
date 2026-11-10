@@ -1107,3 +1107,18 @@ a.match__link:hover {
     border-radius: 16px;
   }
 }
+
+/* ── Шаринг профиля ───────────────────────────────────────────────────── */
+
+.share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.share__hint {
+  flex: 1 1 240px;
+  color: var(--muted-dim);
+  font-size: 12px;
+}
