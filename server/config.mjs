@@ -45,5 +45,16 @@ export const DATABASE_URL = String(process.env.DATABASE_URL ?? '').trim();
 // Секрет для страницы /admin?token=... Придумай длинную случайную строку.
 export const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN ?? '').trim();
 
+// ── Админка: вход по логину и паролю ─────────────────────────────────────
+// Владелец создаётся из этих переменных при каждом старте.
+// Если ADMIN_PASSWORD не задан, паролем владельца становится ADMIN_TOKEN
+// (обратная совместимость со старой ссылкой /admin?token=...).
+export const ADMIN_LOGIN = String(process.env.ADMIN_LOGIN ?? '').trim();
+export const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD ?? '');
+
+// Ключ подписи cookie сессии. Если не задан — выводится из пароля владельца,
+// поэтому сессии не разваливаются при рестарте.
+export const SESSION_SECRET = String(process.env.SESSION_SECRET ?? '').trim();
+
 // Соль для хеширования идентификатора устройства жалобщика.
 export const REPORT_SALT = String(process.env.REPORT_SALT ?? '').trim() || 'cs-faceit-checker-salt';
